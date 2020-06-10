@@ -69,7 +69,7 @@ class Cifar100(VisionDataset):
             all_classes = list(self.class_to_int.values())
             np.random.seed(self.__seed)
             np.random.shuffle(all_classes)
-            self.splits = [all_classes[start:start + 10] for start in range(10)]
+            self.splits = [all_classes[start:start + 10] for start in range(0, 100, 10)]
 
     def get_Kth_class_batch(self, step):
         if step < 0 or step > 9:
@@ -128,25 +128,30 @@ if __name__ == '__main__':
     print(len(t))
     print(len(v))"""
 
-    from torch.utils.data import Subset
-
-    DATASET_ROOT = "../cifar-100-python"
     SEED = 42
-    BATCH_SIZE = 128
-    train_transforms, eval_transforms = utils.get_train_eval_transforms()
-    train_val_dataset = utils.get_cifar_with_seed(DATASET_ROOT, train_transforms, src='train', seed=SEED)
-    test_dataset = utils.get_cifar_with_seed(DATASET_ROOT, eval_transforms, src='test', seed=SEED)
-    incremental_test = []
-    train_idx, val_idx, test_idx = utils.get_kth_batch(train_val_dataset, test_dataset, 0,
-                                                       seed=SEED, train_size=.80, get='indices')
+    train_val_dataset = utils.get_cifar_with_seed('../cifar-100-python', seed=SEED, src='train')
+    test_dataset = utils.get_cifar_with_seed('../cifar-100-python', seed=SEED, src='test')
 
-    # Make test set incremental
-    incremental_test.extend(test_idx)
-    train_set, val_set, test_set = Subset(train_val_dataset, train_idx), \
-                                   Subset(train_val_dataset, val_idx), \
-                                   Subset(test_dataset, incremental_test)
-    # Build data loaders
-    curr_train_loader = utils.get_train_loader(train_set, batch_size=BATCH_SIZE)
-    curr_val_loader = utils.get_eval_loader(val_set, batch_size=BATCH_SIZE)
-    curr_test_loader = utils.get_eval_loader(test_set, batch_size=BATCH_SIZE)
-    print(test_set[0])
+    s1 = set()
+    s2 = set()
+    s3 = set()
+    for stage in range(10):
+        print(f"STARTING FINE TUNING STAGE {stage + 1}...")
+        # Get indices
+        # 4000 training, 1000 validation
+        train_idx, val_idx, test_idx = utils.get_kth_batch(train_val_dataset, test_dataset, stage,
+                                                           seed=SEED, train_size=.80, get='indices')
+
+        _, l1 = train_val_dataset.get_items_of(train_idx)
+        _, l2 = train_val_dataset.get_items_of(val_idx)
+        _, l3 = test_dataset.get_items_of(test_idx)
+        s1.update(l1)
+        s2.update(l2)
+        s3.update(l3)
+        print(sorted(set(l1)))
+        print(sorted(set(l2)))
+        print(sorted(set(l3)))
+        print()
+    print(len(s1))
+    print(len(s2))
+    print(len(s3))
