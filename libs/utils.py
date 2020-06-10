@@ -23,7 +23,7 @@ def get_arguments():
         "DEVICE": 'cuda' if torch.cuda.is_available() else 'cpu',
         "GAMMA": 0.2,
         "SEED": 42,  # use 30, 42, 16, 1993
-        "LOG_FREQUENCY": 25,
+        "LOG_FREQUENCY": 10,
         "NUM_CLASSES": 100
     }
 
@@ -116,5 +116,5 @@ def one_hot_encode_labels(labels: torch.Tensor):
     to_encode = [[__class_map[label], label] for label in labels]
     array = __one_hot_encoder.transform(to_encode).toarray()
     array = [np.array(v[:int(array.shape[1]/2)]) for v in array]
-    array = np.array(array, dtype=np.int8)
+    array = np.array(array, dtype=np.float)
     return torch.from_numpy(array)
