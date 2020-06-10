@@ -14,15 +14,15 @@ __class_map = []
 # default arguments iCarl
 def get_arguments():
     return {
-        "LR": 1e-3,  # default iCarl 2
+        "LR": 1,  # default iCarl 2
         "MOMENTUM": 0.9,
-        "WEIGHT_DECAY": 1e-5,
+        "WEIGHT_DECAY": 5e-5,  # 1e-5
         "NUM_EPOCHS": 70,
         "MILESTONES": [49, 63],
         "BATCH_SIZE": 128,
         "DEVICE": 'cuda' if torch.cuda.is_available() else 'cpu',
         "GAMMA": 0.2,
-        "SEED": 42,  # use 30, 42, 16, 1993
+        "SEED": 30,  # use 30, 42, 16, 1993
         "LOG_FREQUENCY": 30,
         "NUM_CLASSES": 100
     }
