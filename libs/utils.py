@@ -45,7 +45,7 @@ def get_train_eval_transforms():
     return train_transform, eval_transform
 
 
-def get_cifar_with_seed(root, transforms, src='train', seed=None):
+def get_cifar_with_seed(root, transforms=None, src='train', seed=None):
     cifar = Cifar100(root, src, transforms)
     cifar.seed(seed)
     if src == 'train':
@@ -83,7 +83,10 @@ def get_kth_batch(train_val_dataset: Cifar100, test_dataset: Cifar100, training_
                           "probably a different seed has been set in datasets")
 
     train_idx, val_idx = split_train_validation(train_val_dataset, train_val_classes, train_size=train_size, seed=seed)
-    test_idx = test_dataset.get_item_idxs_of(test_classes, data_type='group')
+    idxs = test_dataset.get_item_idxs_of(test_classes, data_type='group')
+    test_idx = []
+    for idx in idxs:
+        test_idx.extend(list(idx))
 
     if get == 'indices':
         return train_idx, val_idx, test_idx
