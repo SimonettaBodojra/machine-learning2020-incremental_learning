@@ -1,11 +1,11 @@
 import torch
 from torchvision import transforms
-import cifar100
 import torch.nn as nn
 import torch.optim as optim
-from resnet import resnet20, resnet32, resnet56
-from cifar100 import split_train_validation, Cifar100
 from torch.utils.data import Subset, DataLoader
+from libs.cifar100 import Cifar100, split_train_validation
+from libs.resnet import resnet20, resnet32, resnet56
+
 
 # default arguments iCarl
 def get_arguments():
@@ -42,7 +42,7 @@ def get_train_eval_transforms():
 
 
 def get_cifar_with_seed(root, transforms, src='train', seed=None):
-    cifar = cifar100.Cifar100(root, src, transforms)
+    cifar = Cifar100(root, src, transforms)
     cifar.seed(seed)
     return cifar
 
@@ -72,7 +72,7 @@ def get_kth_batch(train_val_dataset: Cifar100, test_dataset: Cifar100, training_
     train_val_classes = train_val_dataset.get_Kth_class_batch(training_step)
     test_classes = test_dataset.get_Kth_class_batch(training_step)
 
-    if train_val_classes != test_classes:
+    if list(train_val_classes) != list(test_classes):
         raise SystemError("classes chosesn from training dataset and test dataset are not the same: " +
                           "probably a different seed has been set in datasets")
 
