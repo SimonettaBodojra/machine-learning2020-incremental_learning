@@ -70,7 +70,7 @@ class Cifar100(VisionDataset):
             np.random.shuffle(all_classes)
             self.splits = [all_classes[start:start+10] for start in range(10)]
 
-    def get_Kth_batch(self, step):
+    def get_Kth_class_batch(self, step):
         if step < 0 or step > 9:
             raise ValueError('step must be between 0 and 9 included')
 
@@ -83,8 +83,8 @@ class Cifar100(VisionDataset):
     def clear_splits(self):
         self.splits = None
 
-    def get_img_idxs_of(self, data, data_type='class'):
-        if data_type not in ['class', 'group']:
+    def get_item_idxs_of(self, data, data_type='group'):  # group if data is a list of classes index, class if data
+        if data_type not in ['class', 'group']:      # is a single class index
             raise ValueError('data_type must be "class" or "group"')
         if data_type == 'class':
             mask = self.df.loc[:, 'label'] == data
@@ -97,12 +97,16 @@ class Cifar100(VisionDataset):
                 idx_list.append(np.array(self.df.loc[mask].index))
             return idx_list
 
+    def get_items_of(self, idxs):
+        view = self.df.loc[idxs, :]
+        return view.loc[:, 'image'], view.loc[:, 'label']
+
 
 def split_train_validation(dataset: Cifar100, class_group, train_size=0.5, seed=None):
     from sklearn.model_selection import train_test_split
     train_idx = []
     val_idx = []
-    idx_list = dataset.get_img_idxs_of(class_group, data_type='group')
+    idx_list = dataset.get_item_idxs_of(class_group, data_type='group')
     for idx in idx_list:
         t, v = train_test_split(idx, train_size=train_size, random_state=seed)
         train_idx += list(t)
@@ -114,7 +118,11 @@ def split_train_validation(dataset: Cifar100, class_group, train_size=0.5, seed=
 if __name__ == '__main__':
     cifar = Cifar100('cifar-100-python')
     cifar.seed(42)
-    group = cifar.get_Kth_batch(0)
+    group = cifar.get_Kth_class_batch(0)
     t, v = split_train_validation(cifar, group, seed=42)
-    print(len(set(map(lambda x: cifar[x][1], t))))
-    print(len(set(map(lambda x: cifar[x][1], v))))
+    # print(len(set(map(lambda x: cifar[x][1], t))))
+    # print(len(set(map(lambda x: cifar[x][1], v))))
+    # print(cifar.get_items_of(t)[0].index)
+    print(len(t))
+    print(len(v))
+
