@@ -11,12 +11,13 @@ import numpy as np
 __one_hot_encoder = None
 __class_map = []
 
+
 # default arguments iCarl
 def get_arguments():
     return {
-        "LR": 1,  # default iCarl 2
+        "LR": 1e-2,  # default iCarl 2
         "MOMENTUM": 0.9,
-        "WEIGHT_DECAY": 5e-5,  # 1e-5
+        "WEIGHT_DECAY": 5e-5, #1e-5
         "NUM_EPOCHS": 70,
         "MILESTONES": [49, 63],
         "BATCH_SIZE": 128,
@@ -53,7 +54,7 @@ def get_cifar_with_seed(root, transforms=None, src='train', seed=None):
     return cifar
 
 
-def get_resnet(lr, momentum, weight_decay, milestones, gamma, resnet=32):
+def get_resnet(lr, momentum, weight_decay, milestones, gamma, resnet=32, loss_type='ce'):
     if resnet == 20:
         net = resnet20()
     elif resnet == 32:
@@ -63,7 +64,12 @@ def get_resnet(lr, momentum, weight_decay, milestones, gamma, resnet=32):
     else:
         raise ValueError("resnet parameter must be 20 32 or 56")
 
-    criterion = nn.BCEWithLogitsLoss(reduction='mean')
+    if loss_type == 'ce':
+      criterion = nn.CrossEntropyLoss()
+    elif loss_type == 'bce':
+      criterion = nn.BCEWithLogitsLoss(reduction='mean')
+    else:
+        raise ValueError("loss type must be 'bce' or 'ce'")
     parameters_to_optimize = net.parameters()
     optimizer = optim.SGD(parameters_to_optimize, lr=lr, momentum=momentum, weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=gamma, last_epoch=-1)
