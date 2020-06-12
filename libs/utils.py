@@ -15,9 +15,9 @@ __class_map = []
 # default arguments iCarl
 def get_arguments():
     return {
-        "LR": 1e-2,  # default iCarl 2
+        "LR": 2,  # default iCarl 2
         "MOMENTUM": 0.9,
-        "WEIGHT_DECAY": 5e-5,  # 1e-5
+        "WEIGHT_DECAY":1e-5,  # 1e-5
         "NUM_EPOCHS": 70,
         "MILESTONES": [49, 63],
         "BATCH_SIZE": 128,
@@ -67,8 +67,6 @@ def get_resnet(lr, momentum, weight_decay, milestones, gamma, resnet=32, loss_ty
     if loss_type == 'ce':
         criterion = nn.CrossEntropyLoss()
     elif loss_type == 'bce':
-        criterion = nn.BCELoss()
-    elif loss_type == 'bce_ll':
         criterion = nn.BCEWithLogitsLoss(reduction='mean')
     else:
         raise ValueError("loss type must be 'bce' or 'ce'")
@@ -128,5 +126,5 @@ def one_hot_encode_labels(labels: torch.Tensor):
     to_encode = [[__class_map[label], label] for label in labels]
     array = __one_hot_encoder.transform(to_encode).toarray()
     array = [np.array(v[:int(array.shape[1] / 2)]) for v in array]
-    array = np.array(array, dtype=np.float)
-    return torch.from_numpy(array)
+    array = np.array(array)
+    return torch.from_numpy(array).float()
