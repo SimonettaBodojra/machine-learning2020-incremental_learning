@@ -53,27 +53,35 @@ def get_cifar_with_seed(root, transforms=None, src='train', seed=None):
         init_one_hot_encoder(cifar)
     return cifar
 
-
-def get_resnet(lr, momentum, weight_decay, milestones, gamma, resnet=32, loss_type='ce'):
+def get_resnet(resnet=32):
     if resnet == 20:
-        net = resnet20()
+        return resnet20()
     elif resnet == 32:
-        net = resnet32()
+        return resnet32()
     elif resnet == 56:
-        net = resnet56()
+        return resnet56()
     else:
         raise ValueError("resnet parameter must be 20 32 or 56")
 
+def get_criterion(loss_type='ce'):
     if loss_type == 'ce':
-        criterion = nn.CrossEntropyLoss()
+          return nn.CrossEntropyLoss()
     elif loss_type == 'bce':
-        criterion = nn.BCEWithLogitsLoss(reduction='mean')
+        return nn.BCEWithLogitsLoss(reduction='mean')
     else:
         raise ValueError("loss type must be 'bce' or 'ce'")
 
-    parameters_to_optimize = net.parameters()
+def get_otpmizer_scheduler(parameters_to_optimize, lr, momentum, weight_decay, milestones, gamma):
     optimizer = optim.SGD(parameters_to_optimize, lr=lr, momentum=momentum, weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=gamma, last_epoch=-1)
+    return optimizer, scheduler
+
+
+def get_all_netowork(lr, momentum, weight_decay, milestones, gamma, resnet=32, loss_type='ce'):
+    net = get_resnet(resnet)
+    criterion = get_criterion(loss_type)
+    parameters_to_optimize = net.parameters()
+    optimizer, scheduler = get_otpmizer_scheduler(parameters_to_optimize, lr, momentum, weight_decay, milestones, gamma)
     return net, criterion, optimizer, scheduler
 
 
