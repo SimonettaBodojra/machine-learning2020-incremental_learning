@@ -64,12 +64,31 @@ class Cifar100(VisionDataset):
 
         return img, label
 
+    def __change_class_index(self):
+        keys = list(self.int_to_class)
+        np.random.seed(self.__seed)
+        np.random.shuffle(keys)
+        old_new_label_map = [0 for i in range(100)]
+        for new_label, key in enumerate(keys):
+            old_label = self.class_to_int[key]
+            old_new_label_map[old_label] = new_label
+            self.int_to_class[new_label] = key
+            self.class_to_int[key] = new_label
+
+        self.labels = [old_new_label_map[v] for v in self.labels]
+        self.df = pd.DataFrame({
+            'image': pd.Series(list(self.images)),
+            'label': self.labels,
+        })
+
     def __init_splits(self):
         if self.splits is None:
-            all_classes = list(self.class_to_int.values())
+            """all_classes = list(self.class_to_int.values())
             np.random.seed(self.__seed)
             np.random.shuffle(all_classes)
-            self.splits = [all_classes[start:start + 10] for start in range(0, 100, 10)]
+            self.splits = [all_classes[start:start + 10] for start in range(0, 100, 10)]"""
+            self.__change_class_index()
+            self.splits = [np.arange(start, start + 10) for start in range(0, 100, 10)]
 
     def get_Kth_class_batch(self, step):
         if step < 0 or step > 9:
@@ -155,3 +174,12 @@ if __name__ == '__main__':
     print(len(s1))
     print(len(s2))
     print(len(s3))
+
+    import matplotlib.pyplot as plt
+    img, lab = train_val_dataset[106]
+    plt.figure(figsize=(.6, .6))
+    plt.xticks([])
+    plt.yticks([])
+    plt.imshow(img)
+    plt.show()
+    print(train_val_dataset.int_to_class[lab])

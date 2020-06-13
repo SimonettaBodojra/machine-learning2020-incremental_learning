@@ -15,9 +15,9 @@ __class_map = []
 # default arguments iCarl
 def get_arguments():
     return {
-        "LR": 2,  # default iCarl 2
+        "LR": 2,
         "MOMENTUM": 0.9,
-        "WEIGHT_DECAY":1e-5,  # 1e-5
+        "WEIGHT_DECAY": 1e-5,
         "NUM_EPOCHS": 70,
         "MILESTONES": [49, 63],
         "BATCH_SIZE": 128,
@@ -53,6 +53,7 @@ def get_cifar_with_seed(root, transforms=None, src='train', seed=None):
         init_one_hot_encoder(cifar)
     return cifar
 
+
 def get_resnet(resnet=32):
     if resnet == 20:
         return resnet20()
@@ -63,6 +64,7 @@ def get_resnet(resnet=32):
     else:
         raise ValueError("resnet parameter must be 20 32 or 56")
 
+
 def get_criterion(loss_type='ce'):
     if loss_type == 'ce':
           return nn.CrossEntropyLoss()
@@ -70,6 +72,7 @@ def get_criterion(loss_type='ce'):
         return nn.BCEWithLogitsLoss(reduction='mean')
     else:
         raise ValueError("loss type must be 'bce' or 'ce'")
+
 
 def get_otpmizer_scheduler(parameters_to_optimize, lr, momentum, weight_decay, milestones, gamma):
     optimizer = optim.SGD(parameters_to_optimize, lr=lr, momentum=momentum, weight_decay=weight_decay)
