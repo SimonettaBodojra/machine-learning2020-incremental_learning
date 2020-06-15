@@ -5,11 +5,6 @@ import torch.optim as optim
 from torch.utils.data import Subset, DataLoader
 from libs.cifar100 import Cifar100, split_train_validation
 from libs.resnet import resnet20, resnet32, resnet56
-from sklearn.preprocessing import OneHotEncoder
-import numpy as np
-
-__one_hot_encoder = None
-__class_map = []
 
 
 # default arguments iCarl
@@ -49,8 +44,6 @@ def get_train_eval_transforms():
 def get_cifar_with_seed(root, transforms=None, src='train', seed=None):
     cifar = Cifar100(root, src, transforms)
     cifar.seed(seed)
-    if src == 'train':
-        init_one_hot_encoder(cifar)
     return cifar
 
 
@@ -120,28 +113,7 @@ def get_eval_loader(dataset, batch_size=128):
     return DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4, drop_last=False)
 
 
-def init_one_hot_encoder(dataset: Cifar100):
-    global __one_hot_encoder
-    global __class_map
-    __one_hot_encoder = OneHotEncoder(dtype=np.uint8)
-    __class_map = list(dataset.int_to_class)
-    labels = [[v, i] for i, v in enumerate(__class_map)]
-    __one_hot_encoder = OneHotEncoder(dtype=np.uint8)
-    __one_hot_encoder.fit(labels)
-
-
-def one_hot_encode_labels(labels: torch.Tensor):
-    global __class_map
-    global __one_hot_encoder
-    labels = labels.numpy()
-    to_encode = [[__class_map[label], label] for label in labels]
-    array = __one_hot_encoder.transform(to_encode).toarray()
-    array = [np.array(v[:int(array.shape[1] / 2)]) for v in array]
-    array = np.array(array)
-    return torch.from_numpy(array).float()
-
-
-def get_one_hot(target, num_class):
-    one_hot = torch.zeros(target.shape[0], num_class)
+def get_one_hot(target, num_class, device):
+    one_hot = torch.zeros(target.shape[0], num_class).to(device)
     one_hot = one_hot.scatter(dim=1, index=target.long().view(-1, 1), value=1.)
-    return one_hot
+    return one_hot.to(device)
