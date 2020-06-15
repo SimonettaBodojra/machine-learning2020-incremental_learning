@@ -139,3 +139,9 @@ def one_hot_encode_labels(labels: torch.Tensor):
     array = [np.array(v[:int(array.shape[1] / 2)]) for v in array]
     array = np.array(array)
     return torch.from_numpy(array).float()
+
+
+def get_one_hot(target, num_class):
+    one_hot = torch.zeros(target.shape[0], num_class)
+    one_hot = one_hot.scatter(dim=1, index=target.long().view(-1, 1), value=1.)
+    return one_hot
