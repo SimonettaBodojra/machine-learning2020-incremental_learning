@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from libs.resnet import resnet32
 from libs.utils import get_one_hot
+import libs.utils as utils
 
 
 class iCaRLModel(nn.Module):
@@ -91,15 +92,21 @@ class iCaRLModel(nn.Module):
 
             exemplars = []
             for k in range(m):
-                nearest_mean = []
+                min_index = -1
+                min_dist = .0
                 for i, feature in enumerate(flatten_features):
+                    if i in exemplars:
+                        continue
                     sum_exemplars = 0 if k == 0 else sum(exemplars[:k])
-                    sum_exemplars = (feature + sum_exemplars) / (k+1)
+                    sum_exemplars = (feature + sum_exemplars) / (k + 1)
                     curr_mean_exemplars = sum_exemplars / sum_exemplars.norm(p=2)
+                    curr_dist = torch.dist(class_mean, curr_mean_exemplars)
 
-                    nearest_mean.append(torch.dist(class_mean, curr_mean_exemplars))
+                    if min_index == -1 or min_dist > curr_dist:
+                        min_index = i
+                        min_dist = curr_dist
 
-                exemplars.append(np.argmin(nearest_mean))
+                exemplars.append(min_index)
 
             return exemplars
 
@@ -131,7 +138,9 @@ class AugmentedDataset(Dataset):
 if __name__ == '__main__':
     import libs.utils as utils
     from torch.utils.data import Subset
-    cifar = utils.get_cifar_with_seed('../../cifar-100-python', transforms=utils.get_train_eval_transforms()[1], seed=30)
+
+    cifar = utils.get_cifar_with_seed('../../cifar-100-python', transforms=utils.get_train_eval_transforms()[1],
+                                      seed=30)
     idx = cifar.get_item_idxs_of([0])[0]
     subset = Subset(cifar, idx)
 
