@@ -1,15 +1,15 @@
 import copy
-import numpy as np
 from typing import Iterator
 
 import torch
 import torch.nn as nn
 from torch.nn import Parameter
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 
+import libs.utils as utils
 from libs.resnet import resnet32
 from libs.utils import get_one_hot
-import libs.utils as utils
+import numpy as np
 
 
 class iCaRLModel(nn.Module):
@@ -24,7 +24,7 @@ class iCaRLModel(nn.Module):
         self.net = resnet32(num_classes=num_classes)
 
         self.bce_loss = nn.BCEWithLogitsLoss(reduction='mean')
-        self.exemplar_sets = {label: [] for label in range(0, num_classes)}
+        self.exemplar_sets = [{'indexes': [], 'features': []} for label in range(0, num_classes)]
 
     def before_train(self, device):
         self.net.to(device)
@@ -32,9 +32,30 @@ class iCaRLModel(nn.Module):
             self.old_net.to(device)
             self.old_net.eval()
 
-    def after_train(self, class_batch_size, old_train_set, herding=True):
+        indexes = [diz['indexes'] for diz in self.exemplar_sets[:self.known_classes]]
+        return np.ravel(indexes)
+
+    def after_train(self, class_batch_size, train_subsets_per_class, labels, device, herding=True):
         self.known_classes += class_batch_size
         self.old_net = copy.deepcopy(self)
+
+        self.net = self.net.to(device)
+
+        min_memory = self.memory / self.known_classes
+        class_memories = [min_memory] * self.known_classes
+        empty_memory = self.memory % self.known_classes
+        if empty_memory > 0:
+            for i in range(empty_memory):
+                class_memories[i] += 1
+
+        assert sum(class_memories) == 2000
+
+        for i, m in enumerate(class_memories[: self.known_classes - class_batch_size]):
+            self.reduce_exemplar_set(m, i)
+
+        for curr_subset, label, m in zip(train_subsets_per_class, labels,
+                                         class_memories[self.known_classes - class_batch_size: self.known_classes]):
+            self.construct_exemplar_set(curr_subset, label, m, device, herding=herding)
 
     def increment_class(self, num_classes=10):
         weight = self.net.fc.weight.data
@@ -78,6 +99,7 @@ class iCaRLModel(nn.Module):
         if herding:
             loader = utils.get_eval_loader(single_class_dataset, batch_size=256)
             features = []
+            map_subset_to_cifar = single_class_dataset.indices
 
             self.net.eval()
             with torch.no_grad():
@@ -90,10 +112,10 @@ class iCaRLModel(nn.Module):
                 class_mean = flatten_features.mean(0)
                 class_mean = class_mean / class_mean.norm(p=2)
 
-            exemplars = []
             for k in range(m):
                 min_index = -1
                 min_dist = .0
+                exemplars = self.exemplar_sets[label]['index']
                 for i, feature in enumerate(flatten_features):
                     if i in exemplars:
                         continue
@@ -106,15 +128,15 @@ class iCaRLModel(nn.Module):
                         min_index = i
                         min_dist = curr_dist
 
-                exemplars.append(min_index)
-
-            return exemplars
+                self.exemplar_sets[label]['indexes'].append(map_subset_to_cifar[min_index])
+                self.exemplar_sets[label]['features'].append(flatten_features[min_index])
 
     def reduce_exemplar_set(self, m, label):
         if len(self.exemplar_sets[label]) < m:
             raise ValueError(f"m must be lower than current size of current exemplar set for class {label}")
 
-        self.exemplar_sets[label] = self.exemplar_sets[label][:m]
+        self.exemplar_sets[label]['indexes'] = self.exemplar_sets[label]['indexes'][:m]
+        self.exemplar_sets[label]['features'] = self.exemplar_sets[label]['features'][:m]
 
 
 class AugmentedDataset(Dataset):
@@ -133,30 +155,3 @@ class AugmentedDataset(Dataset):
 
     def __len__(self):
         return self.l1 + self.l2
-
-
-if __name__ == '__main__':
-    import libs.utils as utils
-    from torch.utils.data import Subset
-
-    cifar = utils.get_cifar_with_seed('../../cifar-100-python', transforms=utils.get_train_eval_transforms()[1],
-                                      seed=30)
-    idx = cifar.get_item_idxs_of([0])[0]
-    subset = Subset(cifar, idx)
-
-    icarl = iCaRLModel()
-    icarl.construct_exemplar_set(subset, 0, 10, 'cpu')
-
-    """zeros = [np.zeros(64) for i in range(250)]
-    features = [zeros, zeros.copy()]
-    features = np.array(features)
-    print(features.shape)
-    features = torch.from_numpy(features)
-    print(features.shape)
-    zeros = torch.cat((features[0], features[1]))
-    print(zeros.shape)
-
-    lista = [tensor for tensor in zeros]
-    print(sum(lista[:3]).shape)"""
-
-
