@@ -1,15 +1,14 @@
 import copy
 from typing import Iterator
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import Parameter
-from torch.utils.data import Dataset
 
 import libs.utils as utils
 from libs.resnet import resnet32
 from libs.utils import get_one_hot
-import numpy as np
 
 
 class iCaRLModel(nn.Module):
@@ -69,6 +68,47 @@ class iCaRLModel(nn.Module):
 
     def forward(self, x, features=False):
         return self.net(x, features)
+
+    def compute_exemplars_means(self):
+        means = []
+        for diz in self.exemplar_sets[:self.known_classes]:
+            sum_features = sum(diz['features'])
+            class_mean = sum_features / len(diz['features'])
+            class_mean = class_mean / class_mean.norm(p=2)
+            means.append(class_mean)
+
+        return means
+
+    def classify(self, images, method='nearest-mean'):
+        if method == 'nearest-mean':
+            return self._nearest_mean(images)
+        elif method == 'fc':
+            return self.net(images)
+        elif method == 'knn':
+            return self._k_nearest_neighbours(images)
+
+    def _nearest_mean(self, images):
+        means = self.compute_exemplars_means()
+        targets = np.zeros(len(images))
+
+        self.net.eval()
+        with torch.no_grad():
+            for i, img in enumerate(images):
+                pred = None
+                min_dist = float('inf')
+                feature = self._extract_feature(img)
+                for label, mean in enumerate(means):
+                    dist = torch.dist(feature, mean, p=2)
+                    if min_dist > dist:
+                        min_dist = dist
+                        pred = label
+
+                targets[i] = pred
+
+        return torch.from_numpy(targets)
+
+    def _k_nearest_neighbours(self, images):
+        self.net.eval()
 
     def compute_distillation_loss(self, images, labels, new_outputs, device, num_classes=10):
 
@@ -138,20 +178,3 @@ class iCaRLModel(nn.Module):
         self.exemplar_sets[label]['indexes'] = self.exemplar_sets[label]['indexes'][:m]
         self.exemplar_sets[label]['features'] = self.exemplar_sets[label]['features'][:m]
 
-
-class AugmentedDataset(Dataset):
-
-    def __init__(self, new_class_dataset, old_class_exemplars):
-        self.new_class_dataset = new_class_dataset
-        self.old_class_dataset = old_class_exemplars
-        self.l1 = len(new_class_dataset)
-        self.l2 = len(old_class_exemplars)
-
-    def __getitem__(self, index):
-        if index < self.l1:
-            return self.new_class_dataset[index]  # here it leans on cifar100 get item
-        else:
-            return self.old_class_dataset[index - self.l1]
-
-    def __len__(self):
-        return self.l1 + self.l2

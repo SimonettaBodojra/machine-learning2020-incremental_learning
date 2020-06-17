@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import numpy as np
+from torch.utils.data import Dataset
 from torchvision.datasets import VisionDataset
 from PIL import Image
 
@@ -133,6 +134,24 @@ def split_train_validation(dataset: Cifar100, class_group, train_size=0.5, seed=
         val_idx.extend(list(v))
 
     return train_idx, val_idx
+
+
+class AugmentedDataset(Dataset):
+
+    def __init__(self, new_class_dataset, old_class_exemplars):
+        self.new_class_dataset = new_class_dataset
+        self.old_class_dataset = old_class_exemplars
+        self.l1 = len(new_class_dataset)
+        self.l2 = len(old_class_exemplars)
+
+    def __getitem__(self, index):
+        if index < self.l1:
+            return self.new_class_dataset[index]  # here it leans on cifar100 get item
+        else:
+            return self.old_class_dataset[index - self.l1]
+
+    def __len__(self):
+        return self.l1 + self.l2
 
 
 if __name__ == '__main__':
