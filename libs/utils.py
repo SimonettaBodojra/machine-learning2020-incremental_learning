@@ -3,7 +3,7 @@ from torchvision import transforms
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Subset, DataLoader
-from libs.cifar100 import Cifar100, split_train_validation
+from libs.cifar100 import Cifar100, split_train_validation, AugmentedDataset
 from libs.resnet import resnet20, resnet32, resnet56
 
 
@@ -47,6 +47,10 @@ def get_cifar_with_seed(root, transforms=None, src='train', seed=None):
     return cifar
 
 
+def create_augmented_dataset(new_classes_train_set, old_classes_exemplars):
+    return AugmentedDataset(new_classes_train_set, old_classes_exemplars)
+
+
 def get_resnet(resnet=32):
     if resnet == 20:
         return resnet20()
@@ -60,7 +64,7 @@ def get_resnet(resnet=32):
 
 def get_criterion(loss_type='ce'):
     if loss_type == 'ce':
-          return nn.CrossEntropyLoss()
+        return nn.CrossEntropyLoss()
     elif loss_type == 'bce':
         return nn.BCEWithLogitsLoss(reduction='mean')
     else:
@@ -103,6 +107,12 @@ def get_kth_batch(train_val_dataset: Cifar100, test_dataset: Cifar100, training_
         return train_idx, val_idx, test_idx
     else:
         return Subset(train_val_dataset, train_idx), Subset(train_val_dataset, val_idx), Subset(test_dataset, test_idx)
+
+
+def get_idxs_per_class_of_kth_batch(train_dataset: Cifar100, test_dataset: Cifar100, training_step: int):
+    train_classes = train_dataset.get_Kth_class_batch(training_step)
+    test_classes = test_dataset.get_Kth_class_batch(training_step)
+    return train_dataset.get_item_idxs_of(train_classes), test_dataset.get_item_idxs_of(test_classes, data_type='group')
 
 
 def get_train_loader(dataset, batch_size=128):
