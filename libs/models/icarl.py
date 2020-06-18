@@ -141,11 +141,10 @@ class iCaRLModel(nn.Module):
         if len(single_class_dataset) < m:
             raise ValueError("Number of images can't be less than m")
 
+        map_subset_to_cifar = np.array(single_class_dataset.indices)
+        loader = utils.get_eval_loader(single_class_dataset, batch_size=256)
+        features = []
         if herding:
-            loader = utils.get_eval_loader(single_class_dataset, batch_size=256)
-            features = []
-            map_subset_to_cifar = single_class_dataset.indices
-
             self.net.eval()
             with torch.no_grad():
                 for images, _ in loader:
@@ -175,6 +174,24 @@ class iCaRLModel(nn.Module):
 
                 self.exemplar_sets[label]['indexes'].append(map_subset_to_cifar[min_index])
                 self.exemplar_sets[label]['features'].append(flatten_features[min_index])
+
+        else:
+            self.net.eval()
+            indexes = []
+            with torch.no_grad():
+                for i, (images, _) in enumerate(loader):
+                    choices = np.arange(len(images))
+                    samples = np.random.choice(choices, m, replace=False)
+                    images = images[samples].to(device)
+                    feat = self._extract_feature(images)
+                    features.append(feat)
+                    curr_idx = (i*256) + samples
+                    curr_idx = [map_subset_to_cifar[i] for i in curr_idx]
+                    indexes.extend(curr_idx)
+
+                flatten_features = torch.cat(features)
+                self.exemplar_sets[label]['indexes'] = indexes
+                self.exemplar_sets[label]['features'] = list(flatten_features)
 
     def reduce_exemplar_set(self, m, label):
         if len(self.exemplar_sets[label]['indexes']) < m:
