@@ -32,7 +32,10 @@ class iCaRLModel(nn.Module):
             self.old_net.eval()
 
         indexes = [diz['indexes'] for diz in self.exemplar_sets[:self.known_classes]]
-        return np.ravel(indexes)
+        flatten_idx = []
+        for idx in indexes:
+            flatten_idx.extend(idx)
+        return flatten_idx
 
     def after_train(self, class_batch_size, train_subsets_per_class, labels, device, herding=True):
         self.known_classes += class_batch_size
@@ -40,7 +43,7 @@ class iCaRLModel(nn.Module):
 
         self.net = self.net.to(device)
 
-        min_memory = self.memory / self.known_classes
+        min_memory = int(self.memory / self.known_classes)
         class_memories = [min_memory] * self.known_classes
         empty_memory = self.memory % self.known_classes
         if empty_memory > 0:
@@ -54,6 +57,7 @@ class iCaRLModel(nn.Module):
 
         for curr_subset, label, m in zip(train_subsets_per_class, labels,
                                          class_memories[self.known_classes - class_batch_size: self.known_classes]):
+            print(label)
             self.construct_exemplar_set(curr_subset, label, m, device, herding=herding)
 
     def increment_class(self, num_classes=10):
@@ -88,6 +92,7 @@ class iCaRLModel(nn.Module):
             return self._k_nearest_neighbours(images)
 
     def _nearest_mean(self, images):
+        print("**************** NEAREST MEAN**************")
         means = self.compute_exemplars_means()
         targets = np.zeros(len(images))
 
@@ -155,7 +160,7 @@ class iCaRLModel(nn.Module):
             for k in range(m):
                 min_index = -1
                 min_dist = .0
-                exemplars = self.exemplar_sets[label]['index']
+                exemplars = self.exemplar_sets[label]['indexes']
                 for i, feature in enumerate(flatten_features):
                     if i in exemplars:
                         continue
@@ -172,9 +177,8 @@ class iCaRLModel(nn.Module):
                 self.exemplar_sets[label]['features'].append(flatten_features[min_index])
 
     def reduce_exemplar_set(self, m, label):
-        if len(self.exemplar_sets[label]) < m:
+        if len(self.exemplar_sets[label]['indexes']) < m:
             raise ValueError(f"m must be lower than current size of current exemplar set for class {label}")
 
         self.exemplar_sets[label]['indexes'] = self.exemplar_sets[label]['indexes'][:m]
         self.exemplar_sets[label]['features'] = self.exemplar_sets[label]['features'][:m]
-
