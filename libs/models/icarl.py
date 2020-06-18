@@ -32,10 +32,7 @@ class iCaRLModel(nn.Module):
             self.old_net.eval()
 
         indexes = [diz['indexes'] for diz in self.exemplar_sets[:self.known_classes]]
-        flatten_idx = []
-        for idx in indexes:
-            flatten_idx.extend(idx)
-        return flatten_idx
+        return [] if len(indexes) == 0 else np.hstack(indexes)
 
     def after_train(self, class_batch_size, train_subsets_per_class, labels, device, herding=True):
         self.known_classes += class_batch_size
@@ -73,44 +70,43 @@ class iCaRLModel(nn.Module):
     def forward(self, x, features=False):
         return self.net(x, features)
 
-    def compute_exemplars_means(self):
+    def compute_exemplars_means(self, device):
         means = []
         for diz in self.exemplar_sets[:self.known_classes]:
-            sum_features = sum(diz['features'])
+            features = torch.stack(diz['features']).to(device)
+            sum_features = features.sum(0)
             class_mean = sum_features / len(diz['features'])
             class_mean = class_mean / class_mean.norm(p=2)
             means.append(class_mean)
 
-        return means
+        return torch.stack(means).to(device)
 
-    def classify(self, images, method='nearest-mean'):
+    def classify(self, images, device, method='nearest-mean'):
         if method == 'nearest-mean':
-            return self._nearest_mean(images)
+            return self._nearest_mean(images, device)
         elif method == 'fc':
-            return self.net(images)
+            outputs = self.net(images)
+            _, preds = torch.max(outputs.data, 1)
+            return preds
         elif method == 'knn':
             return self._k_nearest_neighbours(images)
+        else:
+            raise ValueError("method must be one of 'nearest-mean', 'fc', 'knn', 'svm'")
 
-    def _nearest_mean(self, images):
-        print("**************** NEAREST MEAN**************")
-        means = self.compute_exemplars_means()
-        targets = np.zeros(len(images))
+    def _nearest_mean(self, images, device):
+        means = self.compute_exemplars_means(device)
+        targets = torch.zeros(len(images), dtype=torch.int).to(device)
 
         self.net.eval()
         with torch.no_grad():
-            for i, img in enumerate(images):
+            features = self._extract_feature(images)
+            for i, feat in enumerate(features):
                 pred = None
                 min_dist = float('inf')
-                feature = self._extract_feature(img)
-                for label, mean in enumerate(means):
-                    dist = torch.dist(feature, mean, p=2)
-                    if min_dist > dist:
-                        min_dist = dist
-                        pred = label
+                dists = torch.stack([torch.dist(feat, mean) for mean in means]).to(device)
+                targets[i] = int(torch.argmin(dists))
 
-                targets[i] = pred
-
-        return torch.from_numpy(targets)
+        return targets.to(device)
 
     def _k_nearest_neighbours(self, images):
         self.net.eval()
@@ -152,28 +148,33 @@ class iCaRLModel(nn.Module):
                     feat = self._extract_feature(images)
                     features.append(feat)
 
-                flatten_features = torch.cat(features)
+                flatten_features = torch.cat(features).to(device)
                 class_mean = flatten_features.mean(0)
-                class_mean = class_mean / class_mean.norm(p=2)
+                class_mean = (class_mean / class_mean.norm(p=2)).to(device)
 
+            exemplars_indexes = set()
             for k in range(m):
                 min_index = -1
-                min_dist = .0
-                exemplars = self.exemplar_sets[label]['indexes']
-                for i, feature in enumerate(flatten_features):
-                    if i in exemplars:
-                        continue
-                    sum_exemplars = 0 if k == 0 else sum(exemplars[:k])
-                    sum_exemplars = (feature + sum_exemplars) / (k + 1)
-                    curr_mean_exemplars = sum_exemplars / sum_exemplars.norm(p=2)
-                    curr_dist = torch.dist(class_mean, curr_mean_exemplars)
+                min_dist = float('inf')
+                exemplars = self.exemplar_sets[label]['features']
 
-                    if min_index == -1 or min_dist > curr_dist:
+                if len(exemplars) > 0:
+                    exemplars = torch.stack(exemplars).to(device)
+
+                sum_exemplars = 0 if k == 0 else exemplars.sum(0)
+                mean_exemplars = (flatten_features.to(device) + sum_exemplars) / (k + 1)
+                mean_exemplars = torch.stack([torch.dist(class_mean.to(device), e_sum) for e_sum in mean_exemplars])
+                idxs = torch.argsort(mean_exemplars)
+                min_index = 0
+                for i in idxs:
+                    i = int(i)
+                    if i not in exemplars_indexes:
+                        exemplars_indexes.add(i)
                         min_index = i
-                        min_dist = curr_dist
+                        break;
 
                 self.exemplar_sets[label]['indexes'].append(map_subset_to_cifar[min_index])
-                self.exemplar_sets[label]['features'].append(flatten_features[min_index])
+                self.exemplar_sets[label]['features'].append(flatten_features[min_index].cpu())
 
         else:
             self.net.eval()
@@ -185,7 +186,7 @@ class iCaRLModel(nn.Module):
                     images = images[samples].to(device)
                     feat = self._extract_feature(images)
                     features.append(feat)
-                    curr_idx = (i*256) + samples
+                    curr_idx = (i * 256) + samples
                     curr_idx = [map_subset_to_cifar[i] for i in curr_idx]
                     indexes.extend(curr_idx)
 
