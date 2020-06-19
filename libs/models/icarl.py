@@ -74,9 +74,8 @@ class iCaRLModel(nn.Module):
         means = []
         for diz in self.exemplar_sets[:self.known_classes]:
             features = torch.stack(diz['features']).to(device)
-            sum_features = features.sum(0)
-            class_mean = sum_features / len(diz['features'])
-            class_mean = class_mean / class_mean.norm(p=2)
+            class_mean = features.mean(0)
+            class_mean = class_mean / class_mean.norm()
             means.append(class_mean)
 
         return torch.stack(means).to(device)
@@ -101,8 +100,6 @@ class iCaRLModel(nn.Module):
         with torch.no_grad():
             features = self._extract_feature(images)
             for i, feat in enumerate(features):
-                pred = None
-                min_dist = float('inf')
                 dists = torch.stack([torch.dist(feat, mean) for mean in means]).to(device)
                 targets[i] = int(torch.argmin(dists))
 
@@ -150,12 +147,10 @@ class iCaRLModel(nn.Module):
 
                 flatten_features = torch.cat(features).to(device)
                 class_mean = flatten_features.mean(0)
-                class_mean = (class_mean / class_mean.norm(p=2)).to(device)
+                class_mean = (class_mean / class_mean.norm()).to(device)
 
             exemplars_indexes = set()
             for k in range(m):
-                min_index = -1
-                min_dist = float('inf')
                 exemplars = self.exemplar_sets[label]['features']
 
                 if len(exemplars) > 0:
@@ -171,7 +166,7 @@ class iCaRLModel(nn.Module):
                     if i not in exemplars_indexes:
                         exemplars_indexes.add(i)
                         min_index = i
-                        break;
+                        break
 
                 self.exemplar_sets[label]['indexes'].append(map_subset_to_cifar[min_index])
                 self.exemplar_sets[label]['features'].append(flatten_features[min_index].cpu())
