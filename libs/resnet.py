@@ -8,14 +8,15 @@ Taken from https://github.com/hshustc/CVPR19_Incremental_Learning/tree/master/ci
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,padding=1, bias=False)
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+
 
 class BasicBlock(nn.Module):
     expansion = 1
 
     def __init__(self, inplanes, planes, stride=1, downsample=None):
         super(BasicBlock, self).__init__()
-        
+
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = nn.BatchNorm2d(planes)
         self.relu = nn.ReLU(inplace=True)
@@ -135,7 +136,7 @@ class ResNet(nn.Module):
         x = x.view(x.size(0), -1)
 
         if features:
-            x = x / x.norm(dim=1)
+            x = x / x.norm(dim=1).unsqueeze(1)
         else:
             x = self.fc(x)
 

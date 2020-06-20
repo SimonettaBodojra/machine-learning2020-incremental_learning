@@ -18,8 +18,8 @@ class ExemplarSet(Dataset):
 
     def __init__(self, images, labels, transforms):
         assert len(images) == len(labels)
-        self.images = images
-        self.labels = labels
+        self.images = list(images)
+        self.labels = list(labels)
         self.transforms = transforms
 
     def __len__(self):
@@ -73,12 +73,14 @@ class iCaRLModel(nn.Module):
 
     def update_representation(self, train_dataset: Cifar100, optimizer, scheduler, num_epochs):
         self.compute_means = True
+        self.net = self.net.to(self.device)
+
         if len(self.exemplar_sets) > 0:
+            self.old_net = copy.deepcopy(self.net)
+            self.old_net = self.old_net.to(self.device)
             train_dataset = self.combine_trainset_exemplars(train_dataset)
 
         loader = utils.get_train_loader(train_dataset, self.batch_size, drop_last=False)
-
-        self.old_net = copy.deepcopy(self.net)
 
         train_losses = []
         train_accuracies = []
@@ -105,7 +107,7 @@ class iCaRLModel(nn.Module):
                 loss.backward()
                 optimizer.step()
 
-                if i != 0 and i % 30 == 0:
+                if i != 0 and i % 20 == 0:
                     print(f"\t\tEpoch {epoch + 1}: Train_loss = {loss_value}")
 
             curr_train_loss = cumulative_loss / float(len(train_dataset))
@@ -136,7 +138,7 @@ class iCaRLModel(nn.Module):
 
     def classify(self, images, method='nearest-mean'):
         if method == 'nearest-mean':
-            return self._nearest_mean(images)
+            return self._nme(images)
         elif method == 'fc':
             outputs = self.net(images)
             _, preds = torch.max(outputs.data, 1)
@@ -167,7 +169,7 @@ class iCaRLModel(nn.Module):
 
         exemplar_means = self.exemplar_means
         means = torch.stack(exemplar_means)  # (n_classes, feature_size)
-        means = torch.stack([means] * self.batch_size)  # (batch_size, n_classes, feature_size)
+        means = torch.stack([means] * len(images))  # (batch_size, n_classes, feature_size)
         means = means.transpose(1, 2)  # (batch_size, feature_size, n_classes)
 
         feature = self._extract_features(images)
@@ -183,14 +185,14 @@ class iCaRLModel(nn.Module):
         # for i, exemplar_set in enumerate(self.exemplar_sets):
         self.exemplar_sets[label] = self.exemplar_sets[label][:m]
 
-    def construct_exemplar_set(self, images, label, m, herding=True):
+    def construct_exemplar_set(self, indexes, images, label, m, herding=True):
         if herding:
-            self.herding_construct_exemplar_set(images, label, m)
+            self.herding_construct_exemplar_set(indexes, images, label, m)
         else:
             pass
 
     def herding_construct_exemplar_set(self, indexes, images, label, m):
-        exemplar_set = ExemplarSet(images, [label]*len(images), utils.get_train_eval_transforms()[1])
+        exemplar_set = ExemplarSet(images, [label] * len(images), utils.get_train_eval_transforms()[1])
         loader = utils.get_eval_loader(exemplar_set, self.batch_size)
 
         self.net.eval()
@@ -199,13 +201,12 @@ class iCaRLModel(nn.Module):
             for images, _ in loader:
                 images = images.to(self.device)
                 features = self._extract_features(images)
-                print(features)
                 flatten_features.append(features)
 
             flatten_features = torch.cat(flatten_features).cpu().numpy()
             class_mean = np.mean(flatten_features, axis=0)
             class_mean = class_mean / np.linalg.norm(class_mean)
-            class_mean = torch.from_numpy(class_mean).to(self.device)
+            # class_mean = torch.from_numpy(class_mean).to(self.device)
             flatten_features = torch.from_numpy(flatten_features).to(self.device)
 
         exemplars = set()  # lista di exemplars selezionati per la classe corrente
@@ -214,7 +215,7 @@ class iCaRLModel(nn.Module):
             S = 0 if k == 0 else torch.stack(exemplar_feature).sum(0)
             phi = flatten_features
             mu = class_mean
-            mu_p = ((phi + S) / (k+1)).cpu().numpy()
+            mu_p = ((phi + S) / (k + 1)).cpu().numpy()
             mu_p = mu_p / np.linalg.norm(mu_p)
             distances = np.sqrt(np.sum((mu - mu_p) ** 2, axis=1))
             # Evito che si creino duplicati
