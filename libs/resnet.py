@@ -135,7 +135,7 @@ class ResNet(nn.Module):
         x = x.view(x.size(0), -1)
 
         if features:
-            x = x / x.norm()
+            x = x / x.norm(dim=1)
         else:
             x = self.fc(x)
 

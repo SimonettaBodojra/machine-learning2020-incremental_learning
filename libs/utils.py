@@ -115,8 +115,8 @@ def get_idxs_per_class_of_kth_batch(train_dataset: Cifar100, test_dataset: Cifar
     return train_dataset.get_item_idxs_of(train_classes), test_dataset.get_item_idxs_of(test_classes, data_type='group')
 
 
-def get_train_loader(dataset, batch_size=128):
-    return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, drop_last=True)
+def get_train_loader(dataset, batch_size=128, drop_last=True):
+    return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, drop_last=drop_last)
 
 
 def get_eval_loader(dataset, batch_size=128):

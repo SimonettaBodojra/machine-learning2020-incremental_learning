@@ -23,7 +23,9 @@ class iCaRLModel(nn.Module):
         self.net = resnet32(num_classes=num_classes)
 
         self.bce_loss = nn.BCEWithLogitsLoss(reduction='mean')
-        self.exemplar_sets = [{'indexes': [], 'features': []} for label in range(0, num_classes)]
+        self.exemplar_sets = [{'indexes': [], 'features': []} for label in range(num_classes)]
+        self.compute_means = True
+        self.means = []
 
     def before_train(self, device):
         self.net.to(device)
@@ -31,6 +33,7 @@ class iCaRLModel(nn.Module):
             self.old_net.to(device)
             self.old_net.eval()
 
+        self.compute_means = True
         indexes = [diz['indexes'] for diz in self.exemplar_sets[:self.known_classes]]
         return [] if len(indexes) == 0 else np.hstack(indexes)
 
@@ -47,7 +50,7 @@ class iCaRLModel(nn.Module):
             for i in range(empty_memory):
                 class_memories[i] += 1
 
-        assert sum(class_memories) == 2000
+        assert sum(class_memories) == self.memory
 
         for i, m in enumerate(class_memories[: self.known_classes - class_batch_size]):
             self.reduce_exemplar_set(m, i)
@@ -71,14 +74,18 @@ class iCaRLModel(nn.Module):
         return self.net(x, features)
 
     def compute_exemplars_means(self, device):
-        means = []
+        if not self.compute_means:
+            return self.means
+
+        self.means = []
         for diz in self.exemplar_sets[:self.known_classes]:
             features = torch.stack(diz['features']).to(device)
             class_mean = features.mean(0)
             class_mean = class_mean / class_mean.norm()
-            means.append(class_mean)
+            self.means.append(class_mean)
 
-        return torch.stack(means).to(device)
+        self.compute_means = False
+        return torch.stack(self.means).to(device)
 
     def classify(self, images, device, method='nearest-mean'):
         if method == 'nearest-mean':
