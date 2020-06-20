@@ -5,7 +5,6 @@ import numpy as np
 import torch.nn as nn
 from PIL import Image
 from torch.nn import Parameter
-from torch.nn.modules.module import T
 from torch.utils.data import Dataset
 
 import libs.utils as utils
