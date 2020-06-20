@@ -5,6 +5,7 @@ import numpy as np
 import torch.nn as nn
 from PIL import Image
 from torch.nn import Parameter
+from torch.nn.modules.module import T
 from torch.utils.data import Dataset
 
 import libs.utils as utils
@@ -140,6 +141,7 @@ class iCaRLModel(nn.Module):
         if method == 'nearest-mean':
             return self._nme(images)
         elif method == 'fc':
+            self.net.eval()
             outputs = self.net(images)
             _, preds = torch.max(outputs.data, 1)
             return preds
@@ -189,7 +191,7 @@ class iCaRLModel(nn.Module):
         if herding:
             self.herding_construct_exemplar_set(indexes, images, label, m)
         else:
-            pass
+            self.random_construct_exemplar_set(indexes, label, m)
 
     def herding_construct_exemplar_set(self, indexes, images, label, m):
         exemplar_set = ExemplarSet(images, [label] * len(images), utils.get_train_eval_transforms()[1])
@@ -229,5 +231,13 @@ class iCaRLModel(nn.Module):
         assert len(exemplars) == m
         self.exemplar_sets.append(list(exemplars))
 
+    def random_construct_exemplar_set(self, indexes, label, m):
+        choices = np.arange(len(indexes))
+        exemplars = np.random.choice(choices, m, replace=False)
+
+        assert len(self.exemplar_sets) == label  # si assicura che l'inserimento avvenga nell'ordine corretto
+        self.exemplar_sets.append(exemplars)
+
     def parameters(self, recurse: bool = ...) -> Iterator[Parameter]:
         return self.net.parameters()
+
