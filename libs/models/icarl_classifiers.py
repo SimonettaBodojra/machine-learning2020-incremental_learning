@@ -11,6 +11,7 @@ import libs.utils as utils
 from libs.resnet import resnet32
 from libs.cifar100 import Cifar100
 from libs.utils import get_one_hot
+from libs.modified_resnet import BiasLayer
 import copy
 
 
@@ -56,6 +57,11 @@ class iCaRLModel(nn.Module):
         self.compute_means = True
         self.exemplar_means = []
 
+        self.clf = {}  # cache classifiers object (SVM, KNN...) to test them
+        # multiple times without fitting it at each test
+        # (if no training in the meanwhile)
+        # key: 'svm' or 'knn', value: the fitted classifier
+
     def forward(self, x):
         return self.net(x)
 
@@ -74,6 +80,7 @@ class iCaRLModel(nn.Module):
     def update_representation(self, train_dataset: Cifar100, optimizer, scheduler, num_epochs):
         self.compute_means = True
         self.net = self.net.to(self.device)
+
 
         if len(self.exemplar_sets) > 0:
             self.old_net = copy.deepcopy(self.net)
@@ -107,6 +114,7 @@ class iCaRLModel(nn.Module):
                 loss.backward()
                 optimizer.step()
 
+
                 if i != 0 and i % 20 == 0:
                     print(f"\t\tEpoch {epoch + 1}: Train_loss = {loss_value}")
 
@@ -120,6 +128,48 @@ class iCaRLModel(nn.Module):
             print(f"\t\t\tTrain Loss: {curr_train_loss} - Train Accuracy: {curr_train_accuracy}\n")
 
         return np.mean(train_losses), np.mean(train_accuracies)
+
+    #https://github.com/sairin1202/BIC/blob/master/trainer.py
+    def _bias_training(self):
+
+        bias_optimizer = optim.Adam(self.bias_layer.parameters(), lr=0.001)
+        inc_i = int(len(self.exemplar_sets) / 10)
+        # Training of the bias layer
+        if inc_i > 0:
+            net.train(False)
+            print(f'Training Bias {inc_i}')
+            current_step = 0
+            epochs = 20
+            scheduler_bias = optim.lr_scheduler.MultiStepLR(bias_optimizer, milestones=MILESTONES, gamma=GAMMA,
+                                                            last_epoch=-1)
+            for epoch in range(epochs):
+                print('Starting epoch {}/{}, LR = {}'.format(epoch + 1, epochs, scheduler_bias.get_last_lr()))
+
+                # Iterate over the dataset
+                for images, labels in eval_dataloader:
+                    # Bring data over the device of choice
+                    images = images.to(DEVICE)
+                    labels = labels.to(DEVICE)
+                    net.train()
+
+                    bias_optimizer.zero_grad()  # Zero-ing the gradients
+
+                    # Forward pass to the network and to the bias layer
+                    outputs = net(images)
+                    outputs = self.bias_forward(outputs, len(self.exemplar_sets))
+
+                    # One hot encoding labels for binary cross-entropy loss
+                    labels_onehot = nn.functional.one_hot(labels, 100).type_as(outputs)
+
+                    loss = criterion(outputs, labels_onehot)
+
+                    if current_step % 10 == 0:
+                        print('Step {}, Loss {}'.format(current_step, loss.item()))
+
+                    loss.backward()  # backward pass: computes gradients
+                    bias_optimizer.step()  # update weights based on accumulated gradients
+                    current_step += 1
+            scheduler_bias.step()
 
     def compute_distillation_loss(self, images, labels, new_outputs):
 
@@ -153,7 +203,19 @@ class iCaRLModel(nn.Module):
             _, preds = torch.max(outputs.data, 1)
             return preds
 
+    def bias_forward(self, inp, n):
+        """
+        forward as detailed in the paper:
+        apply the bias correction only to the new classes
+        """
+        out_old = inp[:, :n]
+        out_new = inp[:, n:]
+        out_new = self.bias_layer(out_new)
+        return torch.cat([out_old, out_new], dim=1)
+
     def _bias_correction(self, images):
+        self.bias_layer = BiasLayer().to(DEVICE)
+
         self.eval()
         with torch.no_grad():
             net = self.net.eval()
@@ -164,7 +226,7 @@ class iCaRLModel(nn.Module):
     def _cosine_similarity(self, images):
         self.eval()
         with torch.no_grad():
-            features = self.forward(images, get_only_features=True).detach()
+            features = self.forward(images).detach()
             features = F.normalize(features)
             preds = []
 

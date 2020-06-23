@@ -184,15 +184,11 @@ class ResNet(nn.Module):
         #AVG pool on each feature map so output is size 1x1 with depth 64
         self.avgpool = nn.AvgPool2d(8, stride=1)
 
-        if classifier == 'fc':
-            self.fc = nn.Linear(64 * block.expansion, num_classes)
-        elif classifier == 'cosine':
+        if classifier == 'cosine':
             self.fc = CosineLayer(64 * block.expansion, num_classes)
-        elif classifier == 'bias':
-            self.fc = nn.Linear(64 * block.expansion, num_classes)
-            self.fc = BiasLayer(64 * block.expansion, num_classes)
         else:
-            raise (ValueError('Unknown last layer type'))
+            self.fc = nn.Linear(64 * block.expansion, num_classes)
+
 
         for m in self.modules():
 
